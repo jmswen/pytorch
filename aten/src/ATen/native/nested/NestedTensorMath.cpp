@@ -60,6 +60,8 @@ Tensor pad_tensor_to_shape(
 
 
 Tensor NestedTensor_nested_tensor_from_mask(const Tensor& t, const Tensor& mask, bool mask_check) {
+    TORCH_CHECK((mask.scalar_type() == at::ScalarType::Bool) || (mask.dtype().is_floating()), 
+                "Expected mask to be of type Bool or floating dtype but got ", mask.scalar_type(), " instead."); 
     TORCH_CHECK(mask.dim() == 2, "Padding mask should be 2D");
     TORCH_CHECK(t.dim() == 3, "Input should be a 3D tensor, N * L * D");
     auto N = t.size(0), L = t.size(1), D = t.size(2);
@@ -96,6 +98,8 @@ Tensor NestedTensor_nested_tensor_from_mask(const Tensor& t, const Tensor& mask,
 }
 
 bool NestedTensor_nested_tensor_from_mask_left_aligned(const Tensor& t, const Tensor& mask) {
+    TORCH_CHECK((mask.scalar_type() == at::ScalarType::Bool) || (mask.dtype().is_floating()), 
+                "Expected mask to be of type Bool or floating dtype but got ", mask.scalar_type(), " instead."); 
     TORCH_CHECK(mask.dim() == 2, "Padding mask should be 2D");
     TORCH_CHECK(t.dim() == 3, "Input should be a 3D tensor, N * L * D");
     auto N = t.size(0), L = t.size(1);
