@@ -1,8 +1,21 @@
 from typing import Optional
 
+import torch
+from torch import SymInt
 from torch._dynamo import allow_in_graph
-from torch.fx.experimental.symbolic_shapes import constrain_range
+from torch.fx.experimental.symbolic_shapes import constrain_range_non_symint
 from torch.utils._sympy.value_ranges import ValueRangeError
+
+
+def _constrain_range(symbol, min: Optional[int] = None, max: Optional[int] = None):
+    if not isinstance(symbol, SymInt):
+        # This is needed to check if an input value (as a real numeric value, or
+        # an value derived from numeric input) for exporting is within range or
+        # not.
+        constrain_range_non_symint(symbol, min=min, max=max)
+        return
+
+    torch.sym_constrain_range(symbol, min, max)
 
 
 # TODO: we want to hide this min/max stuff under some abstraction similar to
@@ -13,7 +26,7 @@ def constrain_as_value(symbol, min: Optional[int] = None, max: Optional[int] = N
     Add min/max constraint on the intermediate symbol at tracing time
     """
 
-    constrain_range(symbol, min=min, max=max)
+    _constrain_range(symbol, min=min, max=max)
     return symbol
 
 
