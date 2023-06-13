@@ -1,4 +1,5 @@
 import functools
+import itertools
 import logging
 import math
 from typing import Dict, Iterable, Union
@@ -8,7 +9,7 @@ import sympy
 import torch
 from torch.utils._sympy.value_ranges import ValueRangeAnalysis, ValueRanges
 from .ir import FloorDiv, InterpreterShim, LoopBody, ModularIndexing
-from .utils import sympy_subs
+from .utils import sympy_subs, sympy_symbol
 from .virtualized import V
 
 log = logging.getLogger(__name__)
@@ -64,15 +65,25 @@ def range_expressable_in_32_bits(range):
 
 
 def get_expr_range(expr, vars_ranges: dict):
-    free_symbols = list(expr.free_symbols)
-    if len(free_symbols) == 0:
+    symbols = list(expr.free_symbols)
+    if len(symbols) == 0:
         return ValueRanges(expr, expr)
 
+    vars_ranges = vars_ranges.copy()
+
     def replace_symbols_for_deriv(expr):
+        cnt = itertools.count()
+
         # for the purposes of finding local, minimum, maximum, assume smoothness
         def mod_indexing_rep(x, y, z):
             if z.is_constant():
-                return x / y
+                new_var = sympy_symbol("mod_index" + f"{next(cnt)}")
+                if z > 0:
+                    vars_ranges[new_var] = ValueRanges(0, z - 1)
+                else:
+                    vars_ranges[new_var] = ValueRanges(z + 1, 0)
+                symbols.append(new_var)
+                return new_var
 
             # never really happens, we'll bail on optimizing
             return (x / y) % z
@@ -84,7 +95,6 @@ def get_expr_range(expr, vars_ranges: dict):
             FloorDiv, indexing_div_rep
         )
 
-    symbols = expr.free_symbols
     monotonic_increasing = []
     monotonic_decreasing = []
     other_symbols = []
@@ -112,14 +122,14 @@ def get_expr_range(expr, vars_ranges: dict):
 
     if not other_symbols:
         max_val = sympy_subs(
-            expr,
+            expr_for_deriv,
             {
                 k: (v.upper if k in monotonic_increasing else v.lower)
                 for k, v in vars_ranges.items()
             },
         )
         min_val = sympy_subs(
-            expr,
+            expr_for_deriv,
             {
                 k: (v.lower if k in monotonic_increasing else v.upper)
                 for k, v in vars_ranges.items()
