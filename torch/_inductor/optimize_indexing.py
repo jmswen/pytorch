@@ -6,6 +6,7 @@ from typing import Dict, Iterable, Union
 import sympy
 
 import torch
+from torch.fx.experimental.symbolic_shapes import free_symbols
 from torch.utils._sympy.value_ranges import ValueRangeAnalysis, ValueRanges
 from .ir import FloorDiv, InterpreterShim, LoopBody, ModularIndexing
 from .utils import sympy_subs
@@ -64,8 +65,8 @@ def range_expressable_in_32_bits(range):
 
 
 def get_expr_range(expr, vars_ranges: dict):
-    free_symbols = list(expr.free_symbols)
-    if len(free_symbols) == 0:
+    fs = list(expr.free_symbols)
+    if len(fs) == 0:
         return ValueRanges(expr, expr)
 
     def replace_symbols_for_deriv(expr):
@@ -125,6 +126,10 @@ def get_expr_range(expr, vars_ranges: dict):
                 for k, v in vars_ranges.items()
             },
         )
+        if free_symbols(min_val):
+            min_val = -math.inf
+        if free_symbols(max_val):
+            max_val = -math.inf
         return ValueRanges(min_val, max_val)
     else:
         # bail on optimizing, have not run into this yet
@@ -161,6 +166,8 @@ class OptimizeIndexing:
         ]
 
         for k, v in indices_ranges.items():
+            if free_symbols(v):
+                v = math.inf
             self.replace_indirect(k, ValueRanges(0, v))
 
         # avoid computing these values, pessimistically assume that they are unbounded
